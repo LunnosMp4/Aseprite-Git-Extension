@@ -1,5 +1,10 @@
 local selectedGitFolder = nil
-local gitFolderCacheFile = os.getenv("HOME") .. "/.aseprite_git_folder"
+
+local function getUserHome()
+  return os.getenv("HOME") or os.getenv("USERPROFILE") or "."
+end
+
+local gitFolderCacheFile = getUserHome() .. "/.aseprite_git_folder"
 
 local function extractFolder(path)
   return path:match("^(.*)/[^/]+$") -- removes the last file component

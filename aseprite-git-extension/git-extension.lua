@@ -7,14 +7,24 @@ end
 local gitFolderCacheFile = getUserHome() .. "/.aseprite_git_folder"
 
 local function extractFolder(path)
-  return path:match("^(.*)/[^/]+$") -- removes the last file component
+  path = path:gsub("\\", "/")
+  return path:match("^(.*)/[^/]+$")
 end
 
 local function folderIsValidGitRepo(path)
-  local checkCommand = string.format('[ -d "%s/.git" ]', path)
-  local result = os.execute(checkCommand)
-  return result == true or result == 0 -- works on macOS/Linux
+  local command
+  if package.config:sub(1,1) == "\\" then
+    -- Windows
+    command = string.format('if exist "%s\\.git\\" (exit 0) else (exit 1)', path)
+  else
+    -- macOS/Linux
+    command = string.format('[ -d "%s/.git" ]', path)
+  end
+
+  local result = os.execute(command)
+  return result == true or result == 0
 end
+
 
 local function saveGitFolderPath(path)
   local f = io.open(gitFolderCacheFile, "w")
@@ -31,7 +41,6 @@ local function loadGitFolderPath()
     f:close()
     if path ~= "" and folderIsValidGitRepo(path) then
       selectedGitFolder = path
-      print("Loaded Git folder: " .. selectedGitFolder)
     end
   end
 end
@@ -86,25 +95,26 @@ local function showGitStatusDialog(title, command)
     return
   end
 
-  local tempFile = "/tmp/git-status-output.txt"
-  local fullCommand = string.format('cd "%s" && %s > "%s"', selectedGitFolder, command, tempFile)
-
-  local result = os.execute(fullCommand)
-
-  if result then
-    local file = io.open(tempFile, "r")
-    local output = file:read("*all")
-    file:close()
-
-    local dlg = Dialog(title)
-    dlg:label{ label = "Changes:" }
-    dlg:separator()
-    dlg:label{ id="output", text=output }
-    dlg:button{ text="OK" }
-    dlg:show()
-  else
+  local fullCommand = string.format('cd "%s" && %s', selectedGitFolder, command)
+  local handle = io.popen(fullCommand)
+  if not handle then
     app.alert("Failed to run: " .. command)
+    return
   end
+
+  local output = handle:read("*all")
+  handle:close()
+
+  if not output or output == "" then
+    output = "(no output)"
+  end
+
+  local dlg = Dialog(title)
+  dlg:label{ label = "Changes:" }
+  dlg:separator()
+  dlg:label{ id="output", text=output }
+  dlg:button{ text="OK" }
+  dlg:show()
 end
 
 -- Run a Git command from the selected folder
